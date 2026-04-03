@@ -1,9 +1,6 @@
 # house-price-prediction-
 Predicting housing prices using regression models (Kaggle project)
 
-## Visualization
-![Model Diagnostics](diagnostic_plot.png)
-
 # House Price Prediction (Kaggle Project)
 
 ## Overview
