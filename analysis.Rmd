@@ -1,6 +1,6 @@
 ---
 title: "Final_Project"
-author: "JIAYAO LIU"
+author: "JIAYAO LIU""Guo On Chu"
 date: "2026-03-02"
 output: pdf_document
 ---
