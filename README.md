@@ -1,7 +1,7 @@
-# house-price-prediction-
-Predicting housing prices using regression models (Kaggle project)
-
 # House Price Prediction (Kaggle Project)
+
+## Visualization
+![Model Diagnostics](diagnostic_plot.png)
 
 ## Overview
 This project investigates the determinants of residential housing prices and builds predictive models using multiple linear regression.  
@@ -19,9 +19,9 @@ The goal is to improve prediction accuracy and understand key factors influencin
 - Model evaluation using 10-fold cross-validation  
 
 ## Key Findings
-- Living area and basement size have strong positive effects on housing prices  
-- The impact of size increases with overall housing quality (interaction effect)  
-- Higher-quality homes gain more value from additional space  
+- Living area and basement size significantly increase housing prices  
+- The effect of size is stronger in higher-quality homes (interaction effect)  
+- Higher-quality properties generate greater returns from additional space  
 
 ## Model Diagnostics
 - Residual analysis shows no major violation of linear assumptions  
@@ -29,8 +29,7 @@ The goal is to improve prediction accuracy and understand key factors influencin
 - VIF values suggest no severe multicollinearity  
 
 ## Tools
-- R  
-- ggplot2, dplyr  
+- R (ggplot2, dplyr)
 
 ## Report
 Full report available here:  
