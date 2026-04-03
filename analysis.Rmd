@@ -1,0 +1,392 @@
+---
+title: "Final_Project"
+author: "JIAYAO LIU"
+date: "2026-03-02"
+output: pdf_document
+---
+# 1. Data Preparation
+The training dataset was imported and its structure was examined.  
+The dataset contains 7000 observations and 90 variables.
+
+`SalePrice` is the response variable and is stored as numeric.  
+Several engineered predictors (e.g., `Log_GrLivArea`, `House_Age`) are already included in the dataset.
+
+```{r}
+train <- read.csv("HousePriceTrain.csv")
+
+dim(train)
+str(train)
+```
+Summary statistics for main continuous variables
+```{r}
+vars <- c("SalePrice","Log_GrLivArea","Log_LotArea",
+          "TotalBsmtSF","House_Age","OverallQual","GarageCars")
+
+summary_table <- data.frame(
+  Mean = sapply(train[vars], mean),
+  SD   = sapply(train[vars], sd),
+  Min  = sapply(train[vars], min),
+  Max  = sapply(train[vars], max)
+)
+
+summary_table <- round(summary_table, 3)
+summary_table
+```
+
+# 2. Response Variable Transformation
+
+The distribution of `SalePrice` is highly right-skewed.  
+After applying a log transformation, the distribution becomes more symmetric and closer to normality.  
+To stabilize variance and improve model validity, `log(SalePrice)` is used as the response variable.
+```{r}
+par(mfrow=c(1,2))
+hist(train$SalePrice, breaks=50, main="SalePrice")
+hist(log(train$SalePrice), breaks=50, main="log(SalePrice)")
+par(mfrow=c(1,1))
+
+train$logSalePrice <- log(train$SalePrice)
+```
+
+# 3. Missing Value Assessment
+
+Missing values were evaluated across all variables in the training dataset.  
+No missing values were detected; therefore, no imputation or variable removal was required prior to modeling.
+```{r}
+na_count <- colSums(is.na(train))
+na_count <- sort(na_count, decreasing = TRUE)
+
+head(na_count, 15)
+
+na_percent <- na_count / nrow(train)
+head(na_percent, 15)
+```
+
+# 4. Exploratory Analysis
+
+Key continuous, ordinal, and categorical predictors were visually examined in relation to `log(SalePrice)` to assess linearity and potential model inclusion.  
+Several structural variables (e.g., living area, basement size, and overall quality) show clear positive relationships with the response variable.  
+Neighborhood and central air conditioning also exhibit noticeable differences in price distribution.
+
+## [Continuous Predictors]
+```{r}
+par(mfrow=c(2,2))
+
+plot(train$Log_GrLivArea, log(train$SalePrice),
+     main="Log_GrLivArea vs log(SalePrice)")
+
+plot(train$Log_LotArea, log(train$SalePrice),
+     main="Log_LotArea vs log(SalePrice)")
+
+plot(train$TotalBsmtSF, log(train$SalePrice),
+     main="TotalBsmtSF vs log(SalePrice)")
+
+plot(train$House_Age, log(train$SalePrice),
+     main="House_Age vs log(SalePrice)")
+
+par(mfrow=c(1,1))
+```
+
+## [Ordinal / Count Predictors]
+```{r}
+par(mfrow=c(1,3))
+
+plot(train$OverallQual, log(train$SalePrice),
+     main="OverallQual vs log(SalePrice)")
+
+plot(train$GarageCars, log(train$SalePrice),
+     main="GarageCars vs log(SalePrice)")
+
+plot(train$FullBath, log(train$SalePrice),
+     main="FullBath vs log(SalePrice)")
+
+par(mfrow=c(1,1))
+```
+
+## [Categorical Predictors]
+```{r}
+boxplot(log(train$SalePrice) ~ train$Neighborhood,
+        outline=FALSE, las=2,
+        main="Neighborhood vs log(SalePrice)")
+
+boxplot(log(train$SalePrice) ~ train$CentralAir,
+        main="CentralAir vs log(SalePrice)")
+```
+
+# 5. Candidate Model 1 – Baseline Model
+
+A baseline multiple linear regression model was fitted using key structural, quality, and neighborhood predictors identified in the exploratory analysis.
+```{r}
+baseline_model <- lm(
+  logSalePrice ~ 
+    Log_GrLivArea +
+    Log_LotArea +
+    TotalBsmtSF +
+    House_Age +
+    OverallQual +
+    GarageCars +
+    FullBath +
+    Neighborhood +
+    CentralAir,
+  data = train
+)
+
+summary(baseline_model)
+```
+
+# 6. Model Diagnostics – Baseline Model
+
+Model assumptions were evaluated using residual diagnostics, multicollinearity assessment, and influence analysis.
+
+## [Residual Plots]
+```{r}
+par(mfrow=c(2,2))
+plot(baseline_model)
+par(mfrow=c(1,1))
+```
+Diagnostic plots were examined to assess linearity, normality, and homoscedasticity assumptions.
+
+The residuals vs fitted plot shows no strong systematic pattern, suggesting approximate linearity.  
+The Q–Q plot indicates residuals are reasonably close to normal, with only minor deviations in the tails.  
+The scale-location plot suggests slight heteroscedasticity at higher fitted values, but no severe violation is observed.  
+Overall, the classical linear regression assumptions appear reasonably satisfied.
+
+## [Multicollinearity – VIF]
+```{r}
+library(car)
+vif(baseline_model)
+```
+Variance Inflation Factors (VIF) were computed to evaluate multicollinearity.
+
+All adjusted VIF values are well below commonly used thresholds (e.g., 5), indicating no serious multicollinearity issues among the predictors.
+
+## [Influence – Cook’s Distance]
+```{r}
+cd <- cooks.distance(baseline_model)
+
+plot(cd, type="h", main="Cook's Distance")
+abline(h = 4/length(cd), col="red", lty=2)
+```
+A small number of observations exceed the conventional 4/n threshold.
+However, no observations exhibit extreme influence, and the model appears stable.
+
+# 7. Model Selection and Parsimony Assessment
+## Candidate Model 2 – Stepwise AIC Selection
+```{r}
+step_model <- step(baseline_model, direction = "both")
+summary(step_model)
+
+AIC(baseline_model, step_model)
+```
+
+#### Observation
+The stepwise AIC procedure did not remove or add any predictors.
+The resulting model is identical to the baseline model, with the same degrees of freedom (34) and identical AIC (10594.54).
+
+#### Conclusion
+Since the stepwise model does not improve AIC or reduce model complexity, the baseline specification remains preferred.
+There is no evidence that variable elimination improves model fit.
+
+## Candidate Model 3 – Reduced Model
+```{r}
+model_reduced <- lm(
+  logSalePrice ~ 
+    Log_GrLivArea +
+    Log_LotArea +
+    TotalBsmtSF +
+    OverallQual +
+    GarageCars +
+    Neighborhood +
+    CentralAir,
+  data = train
+)
+
+AIC(model_reduced, baseline_model)
+```
+
+#### Observation
+
+The reduced model decreases the number of predictors (df = 32),
+but results in a substantially higher AIC (10610.44) compared to the baseline model (10594.54).
+The increase in AIC  indicates a worse trade-off between model fit and complexity.
+
+#### Conclusion
+Removing predictors leads to a deterioration in model performance.
+Therefore, the reduced model is not preferred, and the baseline specification remains superior among the three candidate models.
+
+However, model refinement through interaction terms may further improve predictive performance.
+
+## Candidate Model 4 – Extended Interaction Model
+```{r}
+final_model <- lm(
+  logSalePrice ~
+    Log_GrLivArea +
+    Log_LotArea +
+    TotalBsmtSF +
+    House_Age +
+    OverallQual +
+    GarageCars +
+    FullBath +
+    Neighborhood +
+    CentralAir +
+    OverallQual:Log_GrLivArea +
+    OverallQual:TotalBsmtSF,
+  data = train
+)
+
+summary(final_model)
+
+## Compare AIC with baseline
+AIC(baseline_model, final_model)
+```
+#### Observation
+Adding interaction terms between OverallQual and key size-related variables substantially improves model fit.
+
+The interaction model achieves a dramatically lower AIC (9885.27) compared to the baseline model (10594.54), representing a reduction of over 700 AIC points.
+
+This indicates a significantly better trade-off between model fit and complexity.
+
+#### Conclusion
+The large decrease in AIC provides strong evidence that allowing the effect of size and basement area to vary by overall quality improves predictive performance.
+
+
+## Candidate Model 5 – Final Model (Kaggle Submission)
+```{r}
+candidate5_model <- lm(
+  logSalePrice ~
+
+    Log_GrLivArea +
+    Log_LotArea +
+    TotalBsmtSF +
+    House_Age +
+    OverallQual +
+    GarageCars +
+    FullBath +
+    Neighborhood +
+    CentralAir +
+    YearRemodAdd +
+
+    # interaction terms
+    OverallQual:Log_GrLivArea +
+    OverallQual:TotalBsmtSF +
+    OverallQual:House_Age +
+    OverallQual:GarageCars,
+
+  data = train
+)
+
+summary(candidate5_model)
+
+# Compare AIC with Candidate 4
+AIC(final_model, candidate5_model)
+```
+#### Observation
+
+The final model extends the previous interaction model by incorporating the variable YearRemodAdd, which captures renovation timing effects, and by introducing an additional interaction term OverallQual × GarageCars.
+
+Including renovation year allows the model to account for the fact that recently remodeled houses often command higher prices even when other structural features remain similar. The additional interaction term captures how the value of garage capacity may vary across different levels of overall housing quality.
+
+The resulting model slightly improves model fit while maintaining interpretability within a linear modeling framework.
+
+#### Conclusion
+
+Candidate Model 5 is selected as the final predictive model for generating Kaggle submissions.
+
+Compared with the previous candidate models, this specification provides the best overall predictive performance by combining:log-transformed size variables, neighborhood effects, key structural attributes, interaction effects with overall quality, renovation timing effects
+
+Using this final model, predictions are generated for the test dataset and submitted to Kaggle as submission6, which achieved the best leaderboard performance among the tested models.
+
+# 8. 10-fold Cross-Validation
+```{r}
+# 8. 10-fold Cross-Validation
+library(caret)
+set.seed(123)
+
+ctrl <- trainControl(method = "cv", number = 10)
+
+# Baseline model CV
+cv_baseline <- train(
+  logSalePrice ~ Log_GrLivArea + Log_LotArea + TotalBsmtSF +
+    House_Age + OverallQual + GarageCars + FullBath +
+    Neighborhood + CentralAir,
+  data = train,
+  method = "lm",
+  trControl = ctrl
+)
+
+# Final model CV (submission6 / Candidate5)
+cv_final <- train(
+  logSalePrice ~
+    Log_GrLivArea + Log_LotArea + TotalBsmtSF +
+    House_Age + OverallQual + GarageCars + FullBath +
+    Neighborhood + CentralAir + YearRemodAdd +
+    OverallQual:Log_GrLivArea +
+    OverallQual:TotalBsmtSF +
+    OverallQual:House_Age +
+    OverallQual:GarageCars,
+  data = train,
+  method = "lm",
+  trControl = ctrl
+)
+
+cv_baseline$results
+cv_final$results
+
+# nice numeric comparison for report text
+rmse_base  <- cv_baseline$results$RMSE
+rmse_final <- cv_final$results$RMSE
+r2_base    <- cv_baseline$results$Rsquared
+r2_final   <- cv_final$results$Rsquared
+
+c(RMSE_baseline = rmse_base, RMSE_final = rmse_final,
+  R2_baseline = r2_base, R2_final = r2_final)
+```
+#### Observation
+10-fold cross-validation suggests that the final model (submission6 / Candidate5) improves predictive performance over the baseline model.
+
+- RMSE decreases from `r round(rmse_base, 3)` to `r round(rmse_final, 3)`
+- $R^2$ increases from `r round(r2_base, 3)` to `r round(r2_final, 3)`
+
+This indicates better generalization performance with the added renovation effect and interaction terms.
+
+The lower prediction error and higher explanatory power indicate better generalization performance.
+
+#### Conclusion
+Both AIC and cross-validation results consistently favor the Candidate5 specification.  
+Therefore, **Candidate Model 5** is selected as the final model for Kaggle submission.
+
+# 9.Final Model Diagnostics
+```{r}
+# Residual Plots
+par(mfrow = c(2,2))
+plot(candidate5_model)
+par(mfrow = c(1,1))
+
+# Multicollinearity
+library(car)
+vif(candidate5_model, type = "predictor")
+
+# Cook's Distance
+cd_final <- cooks.distance(candidate5_model)
+plot(cd_final, type = "h", main = "Cook's Distance (Final Model)")
+abline(h = 4/length(cd_final), col = "red", lty = 2)
+```
+
+#### Final Conclusion
+
+Based on model comparison using AIC and 10-fold cross-validation,  
+the extended interaction specification (**Candidate Model 5**) is selected as the final model.
+
+Compared with earlier candidate models, the final specification incorporates
+renovation timing through **YearRemodAdd** and introduces an additional interaction
+between **OverallQual** and **GarageCars**, allowing the value of garage capacity
+to vary across different levels of housing quality.
+
+These additions further improve predictive performance while maintaining the
+interpretability of the linear regression framework.
+
+Diagnostic analysis confirms that the final model satisfies the classical
+linear regression assumptions, with no severe violations of linearity,
+normality, homoscedasticity, multicollinearity, or influential observations.
+
+Therefore, **Candidate Model 5** is retained as the final predictive specification
+and is used to generate the Kaggle submission (**submission6**).
